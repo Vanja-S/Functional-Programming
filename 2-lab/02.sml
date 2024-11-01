@@ -71,8 +71,8 @@ fun countLeaves (tree : tree) =
 
 (* Vrne število število vej v drevesu. *)
 fun countBranches (Leaf _) = 0
-  | countBranches (Node (_, Leaf _, Leaf _)) = 2
   | countBranches (Node (_, left, right)) = 2 + countBranches(left) + countBranches(right);
+
 
 (* Vrne višino drevesa. Višina lista je 1. *)
 fun height (tree : tree) =
@@ -97,16 +97,17 @@ fun isBalanced (Leaf _) = true
             (diff < 1) orelse (diff = 1)
         end;
 
-(* Helper function to check if a value is within a given range *)
-fun isWithinRange (v : int, min : int, max : int) : bool =
-    v > min andalso v < max;
 
-(* Recursively check if the tree is a BST within the specified value range *)
-fun isBSTHelper (Leaf v, min, max) = true  (* Leaves are always BSTs *)
-  | isBSTHelper (Node (v, left, right), min, max) =
-      isWithinRange (v, min, max) andalso
-      isBSTHelper (left, min, v) andalso 
-      isBSTHelper (right, v, max);
+(* Helper function that checks if a tree is BST within given bounds *)
+fun isBSTHelper (tree: tree, minVal: int, maxVal: int) =
+    case tree of
+        Leaf value => 
+            value > minVal andalso value < maxVal
+        | Node(value, left, right) =>
+            value > minVal 
+            andalso value < maxVal
+            andalso isBSTHelper(left, minVal, value) 
+            andalso isBSTHelper(right, value, maxVal);
 
 (* Vrne true, če je drevo binarno iskalno drevo:
  * - Vrednosti levega poddrevesa so strogo manjši od vrednosti vozlišča.
@@ -114,4 +115,5 @@ fun isBSTHelper (Leaf v, min, max) = true  (* Leaves are always BSTs *)
  * - Obe poddrevesi sta binarni iskalni drevesi.
  * - Listi so binarna iskalna drevesa po definiciji.
  *)
-fun isBST (tree : tree) = isBSTHelper (t, ~Inf, Inf);
+fun isBST (tree: tree) =
+    isBSTHelper(tree, valOf Int.minInt, valOf Int.maxInt);
