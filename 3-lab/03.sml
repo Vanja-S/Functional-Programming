@@ -96,22 +96,27 @@ fun rebalance(drevo) =
         else drevo)
 end;
 
-fun avl(c: ('a * 'a -> order), drevo: 'a bstree, e: 'a) = 
+fun avl (c: ('a * 'a -> order), drevo: 'a bstree, e: 'a) =
   let
-      fun exists(drevo, e) = 
-          case drevo of
-          lf => false |
-          br(l, x, r) => 
-              if c(x, e) = EQUAL 
-              then true 
-              else exists(l, e) orelse exists(r, e)
+    fun exists (drevo, e) =
+      case drevo of
+        lf => false
+      | br (l, x, r) =>
+        case c (x, e) of
+          EQUAL => true
+        | LESS => exists (l, e)
+        | GREATER => exists (r, e)
+
+    fun insert (drevo, e) =
+      case drevo of
+        lf => br (lf, e, lf)
+      | br (l, x, r) =>
+        case c (e, x) of
+          LESS => rebalance (br (insert (l, e), x, r))
+        | GREATER => rebalance (br (l, x, insert (r, e)))
+        | EQUAL => drevo
   in
-      if not(exists(drevo, e))
-      then case drevo of
-          lf => br(lf, e, lf) |
-          br (l, x, r) => 
-              if c(e, x) = LESS
-              then rebalance(br(avl(c, l, e), x, r))
-              else rebalance(br(l, x, avl(c, r, e)))
-      else drevo
-  end;
+    if not (exists (drevo, e))
+    then insert (drevo, e)
+    else drevo
+  end; 
