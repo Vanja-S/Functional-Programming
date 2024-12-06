@@ -52,6 +52,24 @@ val test5 = transpose [[1, 2, 3],[4, 5, 6]] = [[1, 4],[2, 5],[3, 6]];
  
 val _ = print "~~~~~~~~ multiply ~~~~~~~~\n";
 val test_type: int list list -> int list list -> int list list = multiply;
+val test1 = multiply [] [] = [];
+val test2 = multiply [[1]] [[2]] = [[2]];
+val test3 = multiply [[1,2],
+                    [3,4]] 
+                   [[5,6],
+                    [7,8]] = [[19,22],
+                             [43,50]];
+val test4 = multiply [[1,2,3],
+                    [4,5,6]] 
+                   [[7,8],
+                    [9,10],
+                    [11,12]] = [[58,64],
+                               [139,154]];
+val test5 = multiply [[1,0],
+                    [0,1]] 
+                   [[5,6],
+                    [7,8]] = [[5,6],
+                             [7,8]];
  
 val _ = print "~~~~~~~~ equivalenceClasses ~~~~~~~~\n";
 val test_type: ('a -> 'a -> bool) -> 'a list -> 'a list list = equivalenceClasses;
