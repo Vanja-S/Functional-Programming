@@ -18,6 +18,7 @@
 
             (check-equal? (fri (?.. (.. (empty) (empty))) null) (true))
             (check-equal? (fri (?.. (.. (empty) (triggered (exception "lorem ipsum")))) null) (triggered (exception "lorem ipsum")))
+            (check-equal? (fri (?.. (.. (triggered (exception "lorem ipsum")) (empty))) null) (triggered (exception "lorem ipsum")))
 
             (check-equal? (fri (empty) null) (empty))
             (check-equal? (fri (.. (int 1) (empty)) null) (.. (int 1) (empty)))

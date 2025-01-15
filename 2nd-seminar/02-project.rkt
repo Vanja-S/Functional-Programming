@@ -198,9 +198,12 @@
     ; If-then-else
     [(if-then-else condition e1 e2)
     (let ([cond-result (fri condition environment)])
-      (if (false? cond-result)
-          (fri e2 environment)
-          (fri e1 environment)))]
+      (cond 
+        [(triggered? cond-result) cond-result]
+        [else
+          (if (false? cond-result)
+            (fri e2 environment)
+            (fri e1 environment))]))]
     
     ; Type checking
     [(?int e)
@@ -600,19 +603,16 @@
                       (valof "y"))))))
 
 (define (mapping f seq)
-  (vars (list "fn" "sequence") (list f seq)
+  (vars "result" seq
     (vars "helper"
-      (fun "map-helper" '("s" "acc")
-        (if-then-else (?empty (valof "s"))
-          (valof "acc")
-          (call (valof "map-helper")
-            (list 
-              (tail (valof "s"))
-              (.. (call (valof "fn") 
-                          (list (head (valof "s"))))
-                    (valof "acc"))))))
-      (call (valof "helper")
-        (list (valof "sequence") (empty))))))
+      (fun "map-helper" '("lst" "new_lst")
+        (if-then-else (?empty (valof "lst"))
+                      (valof "new_lst")
+                      (call (valof "map-helper")
+                        (list (tail (valof "lst"))
+                          (.. (call f (list (head (valof "lst"))))
+                          (valof "new_lst"))))))
+      (rev (call (valof "helper") (list (valof "result") (empty)))))))
 
 (define (filtering f seq)
   (vars (list "fn" "sequence") (list f seq)
