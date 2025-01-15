@@ -14,12 +14,7 @@
 ;;; Data Types ;;;
 
 ;;; Integers
-(struct int (value) 
-  #:guard (lambda (v _type)
-            (if (integer? v)
-              v
-              (error "Given value for int construction must be an integer!")))
-  #:transparent)
+(struct int (value) #:transparent)
 
 ;;; Booleans
 (struct true () #:transparent)
@@ -213,35 +208,59 @@
       (cond
         ; First check for triggered exceptions
         [(triggered? v) v]
-        [else (if (int? v) (true) (false))]
-      ))]
+        [else (if (int? v) (true) (false))]))]
     
     [(?bool e)
     (let ([v (fri e environment)])
-      (if (or (true? v) (false? v)) (true) (false)))]
+      (cond 
+        ; First check for triggered exceptions
+        [(triggered? v) v]
+        [else (if (or (true? v) (false? v)) (true) (false))]))]
     
     [(?.. e)
     (let ([v (fri e environment)])
-      (if (..? v) (true) (false)))]
+      (cond 
+        ; First check for triggered exceptions
+        [(triggered? v) v]
+
+        [else (if (..? v) 
+                (let ([head (fri (..-e1 e) environment)]
+                      [tail (fri (..-e2 e) environment)])
+                  (cond
+                    [(triggered? head) head]
+                    [(triggered? tail) tail]
+                    [else (true)]
+                  )) 
+                (false))]))]
     
     [(?empty e)
     (let ([v (fri e environment)])
-      (if (empty? v) (true) (false)))]
+      (cond
+        ; First check for triggered exceptions
+        [(triggered? v) v]
+        [else (if (empty? v) (true) (false))]))]
     
     [(?exception e)
     (let ([v (fri e environment)])
-      (if (exception? v) (true) (false)))]
+      (cond
+        ; First check for triggered exceptions
+        [(triggered? v) v]
+        [else (if (exception? v) (true) (false))]))]
     
     [(?seq e)
     (let ([v (fri e environment)])
-      (if (empty? v)
-          (true)
-          (if (..? v)
-           (let ([next (..-e2 v)])
-             (if (empty? next)
-                 (true)
-                 (fri (?seq next) environment)))
-           (false))))]
+      (cond 
+        ; First check for triggered exceptions
+        [(triggered? v) v]
+        [else 
+          (if (empty? v)
+            (true)
+            (if (..? v)
+            (let ([next (..-e2 v)])
+              (if (empty? next)
+                  (true)
+                  (fri (?seq next) environment)))
+            (false)))]))]
 
     ; Addition
     [(add e1 e2)
@@ -277,7 +296,7 @@
       
     ; Multiplication
     [(mul e1 e2)
-    (let ([v1 (fri e1 environment)]
+    (let* ([v1 (fri e1 environment)]
           [v2 (fri e2 environment)])
       (cond
         ; First check for triggered exceptions
@@ -456,12 +475,19 @@
        [else (triggered (exception "vars: wrong argument type"))])]
 
     [(valof s)
-     (if (string? s)
-         (let ([binding (assoc s environment)])
-           (if binding
-               (cdr binding)  ; Return the value if found
-               (triggered (exception "valof: undefined variable"))))
-         (triggered (exception "valof: wrong argument type")))]
+      (if (string? s)
+          (let* ([binding (assoc s environment)])
+            (cond
+              ; First check for triggered exceptions
+              [(triggered? binding) binding]
+
+              [(not (equal? binding #f)) 
+                (cond
+                  [(valof? (cdr binding)) (fri (cdr binding) environment)]
+                  [else (cdr binding)])]
+
+              [else (triggered (exception "valof: undefined variable"))]))
+          (triggered (exception "valof: wrong argument type")))]
 
     [(fun name fargs body)
       (let* ([duplicate_args (has-duplicates? fargs)]
@@ -483,15 +509,15 @@
           [(equal? name "") (closure environment (fun "" fargs body))]
 
           ; else return a closure and add the function name to the environment
-          [else
-            (closure environment (fun name fargs body))]
+          [else (closure environment (fun name fargs body))]
         ))]
 
     [(proc name body)
       (proc name body)]
 
     [(call e args)
-      (let* ([v (fri e environment)])
+      (let* ([v (fri e environment)]
+             [evaluated-args (map (λ (expr) (fri expr environment)) args)])
         (cond
           ; First check for triggered exceptions
           [(triggered? v) v]
@@ -502,11 +528,10 @@
               ; Handle arity mismatch exception
               [(not (= (length (fun-fargs (closure-f v))) (length args))) (triggered (exception "call: arity mismatch"))]
 
-              [else (let* (
-                           [env_with_function (list (cons (fun-name (closure-f v)) v))]
-                           [env_with_args (zip (fun-fargs (closure-f v)) args)]
+              [else (let* ([env_with_function (list (cons (fun-name (closure-f v)) v))]
+                           [env_with_args (zip (fun-fargs (closure-f v)) evaluated-args)]
                            [extended_env (append env_with_args env_with_function)])
-                      (fri (fun-body (closure-f v)) (append extended_env environment)))])]
+                      (fri (fun-body (closure-f v)) (append extended_env (closure-env v))))])]
 
           ; Handle procedure
           [(proc? v)
@@ -514,10 +539,109 @@
               ; Handle arity mismatch exception
               [(not (= (length args) 0)) (triggered (exception "call: arity mismatch"))]
               
-              [else (fri (proc-body v) environment)]
-            )]
+              [else (let * ([env_with_proc (list (cons (proc-name v) v))])
+                      (fri (proc-body v) (append env_with_proc environment)))])]
 
           [else (triggered (exception "call: wrong argument type"))]
         )  
       )]
 ))
+
+;;; Macro system
+
+(define (greater e1 e2) (~ (?leq e1 e2)))
+
+(define (rev e)
+  (vars "seq" e
+      (vars "helper" 
+        (fun "rev-helper" '("s" "acc")
+          (if-then-else (?empty (valof "s"))
+            (valof "acc")
+            (call (valof "rev-helper")
+              (list (tail (valof "s")) 
+                    (.. (head (valof "s")) (valof "acc"))))))
+        (call (valof "helper") 
+          (list (valof "seq") (empty))))))
+
+(define (binary e)
+  (vars "num" e
+    (vars "helper" 
+      (fun "binary-helper" '("n" "acc")
+        (if-then-else (?= (valof "n") (int 0))
+          (if-then-else (?empty (valof "acc"))
+            (.. (int 0) (empty))  ; Special case for 0
+            (valof "acc"))
+          (call (valof "binary-helper")
+            (list 
+              (div (valof "n") (int 2))
+              (.. (mod (valof "n") (int 2)) (valof "acc"))))))
+      (call (valof "helper") 
+        (list (valof "num") (empty))))))
+
+; Helper macros for division and modulo
+(define (div e1 e2)
+  (vars (list "x" "y") (list e1 e2)
+    (vars "helper"
+      (fun "div-helper" '("n" "d" "q")
+        (if-then-else (?leq (valof "d") (valof "n"))
+          (call (valof "div-helper")
+            (list 
+              (add (valof "n") (~ (valof "d")))
+              (valof "d")
+              (add (valof "q") (int 1))))
+          (valof "q")))
+      (call (valof "helper")
+        (list (valof "x") (valof "y") (int 0))))))
+
+(define (mod e1 e2)
+  (vars (list "x" "y") (list e1 e2)
+    (add (valof "x")
+           (~ (mul (div (valof "x") (valof "y"))
+                      (valof "y"))))))
+
+(define (mapping f seq)
+  (vars (list "fn" "sequence") (list f seq)
+    (vars "helper"
+      (fun "map-helper" '("s" "acc")
+        (if-then-else (?empty (valof "s"))
+          (valof "acc")
+          (call (valof "map-helper")
+            (list 
+              (tail (valof "s"))
+              (.. (call (valof "fn") 
+                          (list (head (valof "s"))))
+                    (valof "acc"))))))
+      (call (valof "helper")
+        (list (valof "sequence") (empty))))))
+
+(define (filtering f seq)
+  (vars (list "fn" "sequence") (list f seq)
+    (vars "helper"
+      (fun "filter-helper" '("s" "acc")
+        (if-then-else (?empty (valof "s"))
+          (valof "acc")
+          (vars "test" 
+            (call (valof "fn") (list (head (valof "s"))))
+            (call (valof "filter-helper")
+              (list 
+                (tail (valof "s"))
+                (if-then-else (valof "test")
+                  (.. (head (valof "s")) (valof "acc"))
+                  (valof "acc")))))))
+      (call (valof "helper")
+        (list (valof "sequence") (empty))))))
+
+; Could be broken
+(define (folding f init seq)
+  (vars (list "fn" "initial" "sequence") (list f init seq)
+    (vars "helper"
+      (fun "fold-helper" '("s" "acc")
+        (if-then-else (?empty (valof "s"))
+          (valof "acc")
+          (call (valof "fold-helper")
+            (list 
+              (tail (valof "s"))
+              (call (valof "fn") 
+                    (list (valof "acc") (head (valof "s"))))))))
+      (call (valof "helper")
+        (list (valof "sequence") (valof "initial"))))))

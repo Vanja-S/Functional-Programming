@@ -16,6 +16,9 @@
             (check-equal? (fri (false) null) (false))
             (check-equal? (fri (true) null) (true))
 
+            (check-equal? (fri (?.. (.. (empty) (empty))) null) (true))
+            (check-equal? (fri (?.. (.. (empty) (triggered (exception "lorem ipsum")))) null) (triggered (exception "lorem ipsum")))
+
             (check-equal? (fri (empty) null) (empty))
             (check-equal? (fri (.. (int 1) (empty)) null) (.. (int 1) (empty)))
             (check-equal? (fri (.. (int 1) (.. (int 2) (empty))) null) (.. (int 1) (.. (int 2) (empty))))
@@ -393,6 +396,15 @@
             
         )
 
+        (test-case "vars"
+            (check-equal?
+                (fri (vars "a" (int 1)
+                        (vars "b" (valof "a")
+                            (valof "a"))) null)
+                (int 1)
+            )
+        )
+
         (test-case "vars + fun"
             (check-equal?
                 (fri (vars (list "a" "b" "c")
@@ -409,7 +421,7 @@
             )
         )
 
-        (test-case "vars + proc"
+        (test-case "vars + proc + fun"
             (check-equal?
                 (fri (vars (list "a" "b" "c")
                         (list (int 5) (int 2)
@@ -445,17 +457,17 @@
                                         (mul (valof "c") (valof "x3")))))) null)
                 (triggered (exception "closure: undefined variable"))
             )
-            ;;; (check-equal?
-            ;;;     (fri
-            ;;;         (vars "?" (int 1001)
-            ;;;             (vars "f"
-            ;;;                 (fun "" (list "x")
-            ;;;                     (mul (valof "x") (valof "?")))
-            ;;;                     (vars "?" (int -5)
-            ;;;                         (call (valof "f") (list (valof "?"))))))
-            ;;;     null)
-            ;;;     (int -5005)
-            ;;; )
+            (check-equal?
+                (fri
+                    (vars "?" (int 1001)
+                        (vars "f"
+                            (fun "" (list "x")
+                                (mul (valof "x") (valof "?")))
+                                (vars "?" (int -5)
+                                    (call (valof "f") (list (valof "?"))))))
+                null)
+                (int -5005)
+            )
         )
 
         (test-case "call"
@@ -482,22 +494,86 @@
                             (call (valof "d") (list))) null)
                 (triggered (exception "valof: undefined variable"))
             )
-            ;;; (check-equal?
-            ;;;     (fri (call
-            ;;;         (fun "fib" (list "n")
-            ;;;                 (if-then-else
-            ;;;                 (?leq (valof "n") (int 2))
-            ;;;                 (int 1)
-            ;;;                 (add (call (valof "fib")
-            ;;;                             (list (add (valof "n") (int -1))))
-            ;;;                     (call (valof "fib")
-            ;;;                             (list (add (valof "n") (int -2)))))))
-            ;;;         (list (int 10))) null)
-            ;;;     (int 55)
-            ;;; )
+            (check-equal?
+                (fri (call
+                    (fun "fib" (list "n")
+                            (if-then-else
+                            (?leq (valof "n") (int 2))
+                            (int 1)
+                            (add (call (valof "fib")
+                                        (list (add (valof "n") (int -1))))
+                                (call (valof "fib")
+                                        (list (add (valof "n") (int -2)))))))
+                    (list (int 10))) null)
+                (int 55)
+            )
+        )
+        
+        (test-case "greater"
+            (check-equal?
+                (fri (greater (int 10) (int 15)) null)
+                (false)
+            )
+            (check-equal?
+                (fri (greater (int 10) (int 10)) null)
+                (false)
+            )
+            (check-equal?
+                (fri (greater (int -1) (int -1)) null)
+                (false)
+            )
+            (check-equal? 
+                (fri (greater (int 1) (false)) null)
+                (triggered (exception "?leq: wrong argument type"))
+            )
         )
 
+        (test-case "rev"
+            (check-equal? 
+                (fri (rev (empty)) null)
+                (empty)
+            )
+            (check-equal?
+                (fri (rev (.. (int 3) (.. (int 2) (.. (int 1) (empty))))) null)
+                (.. (int 1) (.. (int 2) (.. (int 3) (empty))))
+            )
+            (check-equal?
+                (fri (rev (add (add (.. (int 2) (.. (int 3) (empty)))
+                                    (add (.. (int 2) (empty)) (empty)))
+                                (add (.. (int 3) (empty)) (.. (empty) (empty))))) null)
+                (.. (empty) (.. (int 3) (.. (int 2) (.. (int 3) (.. (int 2) (empty))))))
+            )
+        )
 
+        (test-case "binary"
+            (check-equal?
+                (fri (binary (add (int 10) (int 6))) null)
+                    (..
+                        (int 1)
+                            (..
+                                (int 0)
+                                    (..
+                                        (int 0)
+                                        (.. (int 0) (.. (int 0) (empty))))))
+            )
+        )
+
+        (test-case "genearting list with procedures"
+            (check-equal?
+                (fri (vars (list "s" "l") (list (int 4) (empty))
+                            (call
+                            (proc "mklist"
+                                (if-then-else
+                                    (?leq (int 0) (valof "s"))
+                                    (vars (list "s" "l")
+                                        (list (add (int -1) (valof "s"))
+                                                (.. (valof "s") (valof "l")))
+                                        (call (valof "mklist") (list)))
+                                    (valof "l"))) (list)))
+                    null)
+                (.. (int 0) (.. (int 1) (.. (int 2) (.. (int 3) (.. (int 4) (empty))))))
+            )
+        )
 ))
 
 ; Run the tests
